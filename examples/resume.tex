@@ -1,0 +1,88 @@
+\documentclass[11pt]{article}
+\usepackage[
+  letterpaper,
+  top=0.5in,
+  bottom=0.5in,
+  left=0.5in,
+  right=0.5in
+]{geometry}
+
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{enumitem}
+\usepackage[hidelinks]{hyperref}
+\usepackage{titlesec}
+\raggedright
+\pagestyle{empty}
+
+\input{glyphtounicode}
+\pdfgentounicode=1
+
+\titleformat{\section}{\bfseries\large}{}{}{}[\titlerule\vspace{-4pt}]
+
+\renewcommand\labelitemi{$\vcenter{\hbox{\small$\bullet$}}$}
+\setlist[itemize]{itemsep=-1pt, leftmargin=12pt, topsep=7pt}
+
+\begin{document}
+
+\centerline{\Huge Jane Doe}
+\centerline{\Large Full-Stack Software Engineer}
+\vspace{4pt}
+\centerline{
+  \href{mailto:jane.doe@email.com}{jane.doe@email.com} | \href{tel:+15551234567}{+1-555-123-4567} | \href{https://www.linkedin.com/in/janedoe}{linkedin.com/in/janedoe} | \href{https://github.com/janedoe}{github.com/janedoe}
+}
+
+\section*{Summary}
+
+\begin{itemize}
+  \item Full-stack engineer with \textbf{4 years} of experience building web applications and backend services. \\
+  \item Proficient in \textbf{Python, JavaScript, React, and Node.js} with hands-on experience deploying to \textbf{AWS}. \\
+  \item Familiar with \textbf{CI/CD pipelines, Docker, and PostgreSQL}. \\
+\end{itemize}
+
+\section*{Skills}
+
+\begin{itemize}
+  \item \textbf{Languages}: Python, JavaScript, TypeScript, SQL \\
+  \item \textbf{Frontend}: React, HTML, CSS, Tailwind CSS \\
+  \item \textbf{Backend}: Node.js, Express, Django, Flask \\
+  \item \textbf{Databases}: PostgreSQL, MongoDB, Redis \\
+  \item \textbf{DevOps}: Docker, AWS (EC2, S3, RDS), GitHub Actions \\
+  \item \textbf{Tools}: Git, Jira, Figma \\
+\end{itemize}
+
+\section*{Experience}
+
+\textbf{Acme Corp} \\
+\textbf{Software Engineer} \hfill March 2022 -- Present \\
+
+\begin{itemize}
+  \item Built and maintained a customer-facing dashboard using \textbf{React and TypeScript}, serving 10,000+ daily active users. \\
+  \item Developed RESTful APIs with \textbf{Django} and \textbf{PostgreSQL} to support product features and third-party integrations. \\
+  \item Set up \textbf{CI/CD pipelines} with GitHub Actions, reducing deployment time from 30 minutes to 8 minutes. \\
+  \item Collaborated with product and design teams in an Agile environment to ship features on a 2-week sprint cycle. \\
+\end{itemize}
+
+\textbf{StartupXYZ} \\
+\textbf{Junior Developer} \hfill June 2020 -- February 2022 \\
+
+\begin{itemize}
+  \item Built internal tools using \textbf{Flask} and \textbf{jQuery} to streamline operations for a 50-person team. \\
+  \item Wrote unit and integration tests, increasing code coverage from 40\% to 85\%. \\
+  \item Managed deployments to \textbf{AWS EC2} and configured \textbf{S3} for static asset hosting. \\
+\end{itemize}
+
+\section*{Projects}
+
+\textbf{TaskFlow -- Project Management App} \hfill \href{https://github.com/janedoe/taskflow}{\underline{github.com/janedoe/taskflow}} \\
+
+\begin{itemize}
+  \item Built a Kanban-style project management app with \textbf{React, Node.js, and MongoDB}. \\
+  \item Implemented real-time updates using WebSockets and drag-and-drop UI with React DnD. \\
+\end{itemize}
+
+\section*{Education}
+
+\textbf{University of California, Berkeley} -- BS in Computer Science \hfill May 2020 \\
+
+\end{document}

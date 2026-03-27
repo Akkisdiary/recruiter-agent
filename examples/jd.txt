@@ -1,0 +1,35 @@
+Senior Full-Stack Engineer
+Stripe — San Francisco, CA (Remote eligible)
+
+About the role
+
+We're looking for a Senior Full-Stack Engineer to join our Payments team. You'll work on the core systems that move money for millions of businesses worldwide. You'll build and maintain APIs, design user-facing dashboards, and collaborate closely with product and design to ship features that directly impact Stripe's revenue.
+
+What you'll do
+
+- Design, build, and maintain scalable web applications and APIs that handle thousands of requests per second
+- Work across the stack — from React frontends to Python/Ruby backend services to PostgreSQL and Redis data stores
+- Own features end-to-end: scoping, architecture, implementation, testing, deployment, and monitoring
+- Collaborate with product managers, designers, and other engineers in a fast-paced Agile environment
+- Improve engineering practices: code reviews, testing strategies, CI/CD pipelines, and observability
+- Mentor junior engineers and contribute to technical design discussions
+- Debug and resolve production incidents, ensuring 99.99% uptime for payment-critical systems
+
+What we look for
+
+- 4+ years of professional software engineering experience
+- Strong proficiency in at least one backend language (Python, Ruby, Java, or Go) and one frontend framework (React, Vue, or Angular)
+- Experience designing and building RESTful APIs
+- Solid understanding of relational databases (PostgreSQL, MySQL) and caching layers (Redis, Memcached)
+- Experience with cloud infrastructure (AWS, GCP, or Azure) and containerization (Docker, Kubernetes)
+- Familiarity with CI/CD tools (GitHub Actions, Jenkins, CircleCI)
+- Strong communication skills and ability to work cross-functionally
+- BS or MS in Computer Science or equivalent practical experience
+
+Nice to have
+
+- Experience with payment systems or fintech
+- Familiarity with event-driven architectures (Kafka, RabbitMQ)
+- Experience with observability tools (Datadog, Prometheus, Grafana)
+- Contributions to open-source projects
+- Experience with TypeScript and Node.js
