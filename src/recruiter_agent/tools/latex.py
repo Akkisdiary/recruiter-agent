@@ -47,7 +47,9 @@ def parse_latex(file_path: Path) -> tuple[str, str, list[ResumeSection]]:
 
     header_content = parts[0].strip()
     if header_content:
-        sections.append(ResumeSection(name="__header__", content=header_content))
+        sections.append(
+            ResumeSection(name="__header__", content=header_content)
+        )
 
     for i in range(1, len(parts), 2):
         section_cmd = parts[i]
@@ -95,7 +97,9 @@ def escape_special_chars(content: str) -> str:
             content = re.sub(r"(?<!\\)#(?!\{)", escaped, content)
         elif char == "%":
             # Don't escape % at start of line (LaTeX comments)
-            content = re.sub(r"(?<!\\)(?<!^)%", escaped, content, flags=re.MULTILINE)
+            content = re.sub(
+                r"(?<!\\)(?<!^)%", escaped, content, flags=re.MULTILINE
+            )
         else:
             content = re.sub(rf"(?<!\\)\{char}", escaped, content)
 
@@ -121,7 +125,9 @@ def format_latex(content: str) -> str:
 
     # Company/role header lines (\textbf{...} \\ or \textbf{...} \hfill)
     # should start on their own line when outside \item
-    content = re.sub(r"(?<!\n)(\\textbf\{[^}]+\}\s*(?:\\\\|\\hfill))", r"\n\1", content)
+    content = re.sub(
+        r"(?<!\n)(\\textbf\{[^}]+\}\s*(?:\\\\|\\hfill))", r"\n\1", content
+    )
 
     # Collapse 3+ consecutive newlines to 2
     content = re.sub(r"\n{3,}", "\n\n", content)
@@ -160,7 +166,9 @@ def validate_latex(content: str) -> list[str]:
             start = max(0, i - 20)
             end = min(len(content), i + 20)
             context = content[start:end].replace("\n", "\\n")
-            warnings.append(f"Unbalanced braces: extra '}}' near: ...{context}...")
+            warnings.append(
+                f"Unbalanced braces: extra '}}' near: ...{context}..."
+            )
             break
     if depth > 0:
         warnings.append(f"Unbalanced braces: {depth} unclosed '{{' remaining")
@@ -171,7 +179,9 @@ def validate_latex(content: str) -> list[str]:
         # Find bare occurrences not preceded by backslash
         if char == "%":
             # Skip start-of-line % (comments)
-            matches = list(re.finditer(r"(?<!\\)(?<!^)%", content, re.MULTILINE))
+            matches = list(
+                re.finditer(r"(?<!\\)(?<!^)%", content, re.MULTILINE)
+            )
         elif char == "#":
             matches = list(re.finditer(r"(?<!\\)#(?!\{)", content))
         else:
@@ -195,7 +205,9 @@ def _check_environments(nodelist, warnings: list[str]) -> None:
             env_name = node.environmentname
             # Check that the environment has content (not empty \begin{}\end{})
             if env_name and not node.nodelist:
-                warnings.append(f"Empty environment: \\begin{{{env_name}}}...\\end{{{env_name}}}")
+                warnings.append(
+                    f"Empty environment: \\begin{{{env_name}}}...\\end{{{env_name}}}"
+                )
             # Recurse into environment content
             _check_environments(node.nodelist, warnings)
 

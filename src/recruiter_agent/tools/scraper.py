@@ -21,7 +21,9 @@ def scrape_jd(url: str) -> str:
         console.print("[yellow]Some sites block automated requests.[/]")
         console.print()
         console.print("[bold]Please paste the job description text below.[/]")
-        console.print("[dim]Paste the content, then press Enter twice on an empty line to finish:[/]")
+        console.print(
+            "[dim]Paste the content, then press Enter twice on an empty line to finish:[/]"
+        )
         console.print()
         return _read_multiline_input()
 
@@ -56,13 +58,17 @@ def _fetch_and_extract(url: str) -> str:
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
         "Accept-Language": "en-US,en;q=0.9",
     }
-    response = httpx.get(url, headers=headers, follow_redirects=True, timeout=30)
+    response = httpx.get(
+        url, headers=headers, follow_redirects=True, timeout=30
+    )
     response.raise_for_status()
     html = response.text
 
     # Try trafilatura first — better at extracting main content from job boards
     if trafilatura is not None:
-        extracted = trafilatura.extract(html, include_links=False, include_tables=True)
+        extracted = trafilatura.extract(
+            html, include_links=False, include_tables=True
+        )
         if extracted and len(extracted) > 100:
             return extracted
 
@@ -80,6 +86,8 @@ def _fetch_and_extract(url: str) -> str:
     result = "\n".join(lines)
 
     if len(result) < 100:
-        raise ValueError(f"Extracted text too short ({len(result)} chars) — likely blocked or empty page")
+        raise ValueError(
+            f"Extracted text too short ({len(result)} chars) — likely blocked or empty page"
+        )
 
     return result

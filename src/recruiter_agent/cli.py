@@ -36,11 +36,17 @@ def enhance(
     ] = None,
     jd_file: Annotated[
         Optional[Path],
-        typer.Option("--jd-file", "-f", help="Path to a text file containing the job description"),
+        typer.Option(
+            "--jd-file",
+            "-f",
+            help="Path to a text file containing the job description",
+        ),
     ] = None,
     output: Annotated[
         Optional[Path],
-        typer.Option("--output", "-o", help="Output path for enhanced .tex file"),
+        typer.Option(
+            "--output", "-o", help="Output path for enhanced .tex file"
+        ),
     ] = None,
     model: Annotated[
         Optional[str],
@@ -48,7 +54,9 @@ def enhance(
     ] = None,
     provider: Annotated[
         str,
-        typer.Option("--provider", "-p", help="LLM provider (anthropic, openai, google)"),
+        typer.Option(
+            "--provider", "-p", help="LLM provider (anthropic, openai, google)"
+        ),
     ] = "google",
     verbose: Annotated[
         bool,
@@ -115,7 +123,9 @@ def enhance(
     after = result["after_score"]
 
     console.print()
-    table = Table(title="ATS Score Comparison", show_header=True, header_style="bold")
+    table = Table(
+        title="ATS Score Comparison", show_header=True, header_style="bold"
+    )
     table.add_column("Category", style="bold")
     table.add_column("Before", justify="center")
     table.add_column("After", justify="center")
@@ -138,7 +148,9 @@ def enhance(
         else:
             change_str = "[dim]0[/]"
 
-        before_style = "[red]" if b < 50 else "[yellow]" if b < 70 else "[green]"
+        before_style = (
+            "[red]" if b < 50 else "[yellow]" if b < 70 else "[green]"
+        )
         after_style = "[red]" if a < 50 else "[yellow]" if a < 70 else "[green]"
 
         table.add_row(

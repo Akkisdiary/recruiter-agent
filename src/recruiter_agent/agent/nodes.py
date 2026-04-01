@@ -68,7 +68,9 @@ def parse_resume_node(state: ResumeAgentState) -> dict:
     preamble, postamble, sections = parse_latex(file_path)
 
     if state.get("verbose"):
-        console.print(f"  Found {len(sections)} sections: {[s.name for s in sections]}")
+        console.print(
+            f"  Found {len(sections)} sections: {[s.name for s in sections]}"
+        )
 
     return {
         "raw_latex": raw_latex,
@@ -80,7 +82,9 @@ def parse_resume_node(state: ResumeAgentState) -> dict:
 
 def scrape_jd_node(state: ResumeAgentState) -> dict:
     """Scrape the job description URL and extract structured analysis."""
-    console.print("[bold blue]Step 2:[/] Scraping job description...", highlight=False)
+    console.print(
+        "[bold blue]Step 2:[/] Scraping job description...", highlight=False
+    )
 
     jd_text_override = state.get("jd_text_override")
     if jd_text_override:
@@ -92,7 +96,9 @@ def scrape_jd_node(state: ResumeAgentState) -> dict:
     if state.get("verbose"):
         console.print(f"  Extracted {len(jd_text)} characters from JD")
 
-    console.print("[bold blue]       [/] Analyzing job requirements...", highlight=False)
+    console.print(
+        "[bold blue]       [/] Analyzing job requirements...", highlight=False
+    )
 
     llm = _get_llm(state)
     structured_llm = llm.with_structured_output(JDAnalysis)
@@ -106,7 +112,9 @@ def scrape_jd_node(state: ResumeAgentState) -> dict:
     )
 
     if state.get("verbose"):
-        console.print(f"  Role: {jd_analysis.job_title} at {jd_analysis.company}")
+        console.print(
+            f"  Role: {jd_analysis.job_title} at {jd_analysis.company}"
+        )
         console.print(f"  Keywords: {', '.join(jd_analysis.keywords[:10])}...")
 
     return {
@@ -115,7 +123,9 @@ def scrape_jd_node(state: ResumeAgentState) -> dict:
     }
 
 
-def _score_resume(state: ResumeAgentState, sections: list[ResumeSection]) -> ATSScore:
+def _score_resume(
+    state: ResumeAgentState, sections: list[ResumeSection]
+) -> ATSScore:
     """Score resume sections against the JD."""
     llm = _get_llm(state)
     structured_llm = llm.with_structured_output(ATSScore)
@@ -142,7 +152,9 @@ def _score_resume(state: ResumeAgentState, sections: list[ResumeSection]) -> ATS
 
 def score_before_node(state: ResumeAgentState) -> dict:
     """Score the original resume against the JD."""
-    console.print("[bold blue]Step 3:[/] Scoring original resume...", highlight=False)
+    console.print(
+        "[bold blue]Step 3:[/] Scoring original resume...", highlight=False
+    )
 
     score = _score_resume(state, state["sections"])
 
@@ -202,9 +214,13 @@ def ask_clarifications_node(state: ResumeAgentState) -> dict:
         for i, q in enumerate(clarification.questions, 1):
             console.print(f"[bold]{i}. {q.question}[/]")
             console.print(f"[dim]   Example: {q.example_answer}[/]")
-            answer = console.input("[dim]Your answer (press Enter to skip): [/]")
+            answer = console.input(
+                "[dim]Your answer (press Enter to skip): [/]"
+            )
             if answer.strip():
-                qa_pairs.append(ClarifyingQA(question=q.question, answer=answer.strip()))
+                qa_pairs.append(
+                    ClarifyingQA(question=q.question, answer=answer.strip())
+                )
         console.print()
     else:
         console.print("  No clarifications needed")
@@ -224,7 +240,9 @@ def enhance_resume_node(state: ResumeAgentState) -> dict:
             highlight=False,
         )
     else:
-        console.print("[bold blue]Step 5:[/] Enhancing resume...", highlight=False)
+        console.print(
+            "[bold blue]Step 5:[/] Enhancing resume...", highlight=False
+        )
 
     llm = _get_llm(state)
     structured_llm = llm.with_structured_output(EnhancedSections)
@@ -234,7 +252,9 @@ def enhance_resume_node(state: ResumeAgentState) -> dict:
     # Separate header from content sections — header is never sent to LLM
     header_section = None
     content_sections = []
-    source_sections = state.get("enhanced_sections") if is_revision else state["sections"]
+    source_sections = (
+        state.get("enhanced_sections") if is_revision else state["sections"]
+    )
     for s in source_sections:
         if s.name == "__header__":
             header_section = s
@@ -296,7 +316,9 @@ def enhance_resume_node(state: ResumeAgentState) -> dict:
     for s in result.sections:
         if s.name == "__header__":
             continue  # skip if LLM returned it anyway
-        enhanced.append(ResumeSection(name=s.name, content=_postprocess_section(s.content)))
+        enhanced.append(
+            ResumeSection(name=s.name, content=_postprocess_section(s.content))
+        )
 
     if state.get("verbose"):
         console.print(f"  Enhanced {len(enhanced)} sections")
@@ -313,7 +335,9 @@ def score_after_node(state: ResumeAgentState) -> dict:
             highlight=False,
         )
     else:
-        console.print("[bold blue]Step 6:[/] Scoring enhanced resume...", highlight=False)
+        console.print(
+            "[bold blue]Step 6:[/] Scoring enhanced resume...", highlight=False
+        )
 
     score = _score_resume(state, state["enhanced_sections"])
 
@@ -355,7 +379,10 @@ def _get_change_summary(state: ResumeAgentState) -> str:
 def review_changes_node(state: ResumeAgentState) -> dict:
     """Show changes to the user and ask for feedback. Returns revision_feedback and revision_count."""
     if state.get("no_interactive"):
-        return {"revision_feedback": None, "revision_count": state.get("revision_count", 0)}
+        return {
+            "revision_feedback": None,
+            "revision_count": state.get("revision_count", 0),
+        }
 
     # Show a summary of what changed
     console.print()
@@ -373,10 +400,15 @@ def review_changes_node(state: ResumeAgentState) -> dict:
         choice = console.input("[bold]Your choice (a/f): [/]").strip().lower()
         if choice in ("a", "f"):
             break
-        console.print("[red]  Please enter 'a' to accept or 'f' for feedback[/]")
+        console.print(
+            "[red]  Please enter 'a' to accept or 'f' for feedback[/]"
+        )
 
     if choice == "a":
-        return {"revision_feedback": None, "revision_count": state.get("revision_count", 0)}
+        return {
+            "revision_feedback": None,
+            "revision_count": state.get("revision_count", 0),
+        }
 
     console.print()
     feedback = console.input(
@@ -403,9 +435,7 @@ def write_output_node(state: ResumeAgentState) -> dict:
 
     # Validate only the document body (between \begin{document} and \end{document})
     # to avoid false positives on LaTeX comments in the preamble
-    body_content = "\n".join(
-        s.content for s in state["enhanced_sections"]
-    )
+    body_content = "\n".join(s.content for s in state["enhanced_sections"])
     warnings = validate_latex(body_content)
     if warnings:
         console.print("[yellow]LaTeX validation warnings:[/]")

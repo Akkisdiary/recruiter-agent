@@ -3,7 +3,9 @@ import os
 from langchain_core.language_models import BaseChatModel
 
 
-def get_llm(provider: str = "anthropic", model: str | None = None) -> BaseChatModel:
+def get_llm(
+    provider: str = "anthropic", model: str | None = None
+) -> BaseChatModel:
     """Create an LLM instance for the given provider and model."""
     if provider == "anthropic":
         from langchain_anthropic import ChatAnthropic
@@ -11,7 +13,9 @@ def get_llm(provider: str = "anthropic", model: str | None = None) -> BaseChatMo
         model = model or "claude-sonnet-4-20250514"
         api_key = os.environ.get("ANTHROPIC_API_KEY")
         if not api_key:
-            raise ValueError("ANTHROPIC_API_KEY environment variable is required")
+            raise ValueError(
+                "ANTHROPIC_API_KEY environment variable is required"
+            )
         return ChatAnthropic(model=model, api_key=api_key)  # type: ignore[arg-type]
 
     elif provider == "openai":
@@ -45,4 +49,6 @@ def get_llm(provider: str = "anthropic", model: str | None = None) -> BaseChatMo
         return ChatGoogleGenerativeAI(model=model, google_api_key=api_key)  # type: ignore[arg-type]
 
     else:
-        raise ValueError(f"Unknown provider: {provider}. Supported: anthropic, openai, google")
+        raise ValueError(
+            f"Unknown provider: {provider}. Supported: anthropic, openai, google"
+        )
