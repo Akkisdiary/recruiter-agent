@@ -5,9 +5,11 @@ from rich.console import Console
 from rich.panel import Panel
 
 from recruiter_agent.agent.prompts import (
+    CHANGE_SUMMARY_PROMPT,
     CLARIFICATION_PROMPT,
     ENHANCEMENT_PROMPT,
     JD_ANALYSIS_PROMPT,
+    REVISION_PROMPT,
     SCORING_PROMPT,
     SYSTEM_PROMPT,
 )
@@ -59,7 +61,7 @@ def _sections_to_text(sections: list[ResumeSection]) -> str:
 
 def parse_resume_node(state: ResumeAgentState) -> dict:
     """Parse the LaTeX resume into preamble, sections, and postamble."""
-    console.print("[bold blue]Step 1/7:[/] Parsing resume...", highlight=False)
+    console.print("[bold blue]Step 1:[/] Parsing resume...", highlight=False)
 
     file_path = Path(state["resume_path"])
     raw_latex = file_path.read_text(encoding="utf-8")
@@ -78,7 +80,7 @@ def parse_resume_node(state: ResumeAgentState) -> dict:
 
 def scrape_jd_node(state: ResumeAgentState) -> dict:
     """Scrape the job description URL and extract structured analysis."""
-    console.print("[bold blue]Step 2/7:[/] Scraping job description...", highlight=False)
+    console.print("[bold blue]Step 2:[/] Scraping job description...", highlight=False)
 
     jd_text_override = state.get("jd_text_override")
     if jd_text_override:
@@ -140,7 +142,7 @@ def _score_resume(state: ResumeAgentState, sections: list[ResumeSection]) -> ATS
 
 def score_before_node(state: ResumeAgentState) -> dict:
     """Score the original resume against the JD."""
-    console.print("[bold blue]Step 3/7:[/] Scoring original resume...", highlight=False)
+    console.print("[bold blue]Step 3:[/] Scoring original resume...", highlight=False)
 
     score = _score_resume(state, state["sections"])
 
@@ -164,7 +166,7 @@ def score_before_node(state: ResumeAgentState) -> dict:
 
 def ask_clarifications_node(state: ResumeAgentState) -> dict:
     """Optionally ask the user clarifying questions about their experience."""
-    console.print("[bold blue]Step 4/7:[/] Checking for gaps...", highlight=False)
+    console.print("[bold blue]Step 4:[/] Checking for gaps...", highlight=False)
 
     if state.get("no_interactive"):
         console.print("  Skipped (non-interactive mode)")
@@ -211,53 +213,74 @@ def ask_clarifications_node(state: ResumeAgentState) -> dict:
 
 
 def enhance_resume_node(state: ResumeAgentState) -> dict:
-    """Enhance the resume sections based on JD analysis and scores."""
-    console.print("[bold blue]Step 5/7:[/] Enhancing resume...", highlight=False)
+    """Enhance the resume sections based on JD analysis, scores, and optional revision feedback."""
+    revision_count = state.get("revision_count", 0)
+    revision_feedback = state.get("revision_feedback")
+    is_revision = revision_count > 0 and revision_feedback
+
+    if is_revision:
+        console.print(
+            f"[bold blue]Revision {revision_count}:[/] Revising resume based on your feedback...",
+            highlight=False,
+        )
+    else:
+        console.print("[bold blue]Step 5:[/] Enhancing resume...", highlight=False)
 
     llm = _get_llm(state)
     structured_llm = llm.with_structured_output(EnhancedSections)
 
     jd = state["jd_analysis"]
-    score = state["before_score"]
-
-    # Build clarification context
-    qa_pairs = state.get("clarifying_qa", [])
-    if qa_pairs:
-        qa_text = "Candidate's answers to clarifying questions:\n"
-        for qa in qa_pairs:
-            qa_text += f"Q: {qa.question}\nA: {qa.answer}\n\n"
-        clarification_context = qa_text
-    else:
-        clarification_context = "No additional information from candidate."
 
     # Separate header from content sections — header is never sent to LLM
     header_section = None
     content_sections = []
-    for s in state["sections"]:
+    source_sections = state.get("enhanced_sections") if is_revision else state["sections"]
+    for s in source_sections:
         if s.name == "__header__":
             header_section = s
         else:
             content_sections.append(s)
 
-    # Serialize only content sections for the prompt
     sections_json = json.dumps(
         [{"name": s.name, "content": s.content} for s in content_sections],
         indent=2,
     )
 
-    prompt = ENHANCEMENT_PROMPT.format(
-        job_title=jd.job_title,
-        company=jd.company,
-        required_skills=", ".join(jd.required_skills),
-        preferred_skills=", ".join(jd.preferred_skills),
-        responsibilities=", ".join(jd.responsibilities),
-        keywords=", ".join(jd.keywords),
-        before_score=score.overall,
-        missing_keywords=", ".join(score.missing_keywords),
-        feedback=score.feedback,
-        clarification_context=clarification_context,
-        sections_json=sections_json,
-    )
+    if is_revision:
+        prompt = REVISION_PROMPT.format(
+            job_title=jd.job_title,
+            company=jd.company,
+            required_skills=", ".join(jd.required_skills),
+            preferred_skills=", ".join(jd.preferred_skills),
+            responsibilities=", ".join(jd.responsibilities),
+            keywords=", ".join(jd.keywords),
+            revision_feedback=revision_feedback,
+            sections_json=sections_json,
+        )
+    else:
+        score = state["before_score"]
+        qa_pairs = state.get("clarifying_qa", [])
+        if qa_pairs:
+            qa_text = "Candidate's answers to clarifying questions:\n"
+            for qa in qa_pairs:
+                qa_text += f"Q: {qa.question}\nA: {qa.answer}\n\n"
+            clarification_context = qa_text
+        else:
+            clarification_context = "No additional information from candidate."
+
+        prompt = ENHANCEMENT_PROMPT.format(
+            job_title=jd.job_title,
+            company=jd.company,
+            required_skills=", ".join(jd.required_skills),
+            preferred_skills=", ".join(jd.preferred_skills),
+            responsibilities=", ".join(jd.responsibilities),
+            keywords=", ".join(jd.keywords),
+            before_score=score.overall,
+            missing_keywords=", ".join(score.missing_keywords),
+            feedback=score.feedback,
+            clarification_context=clarification_context,
+            sections_json=sections_json,
+        )
 
     result = structured_llm.invoke(
         [
@@ -283,7 +306,14 @@ def enhance_resume_node(state: ResumeAgentState) -> dict:
 
 def score_after_node(state: ResumeAgentState) -> dict:
     """Score the enhanced resume."""
-    console.print("[bold blue]Step 6/7:[/] Scoring enhanced resume...", highlight=False)
+    revision_count = state.get("revision_count", 0)
+    if revision_count > 0:
+        console.print(
+            f"[bold blue]Revision {revision_count}:[/] Scoring revised resume...",
+            highlight=False,
+        )
+    else:
+        console.print("[bold blue]Step 6:[/] Scoring enhanced resume...", highlight=False)
 
     score = _score_resume(state, state["enhanced_sections"])
 
@@ -301,9 +331,69 @@ def score_after_node(state: ResumeAgentState) -> dict:
     return {"after_score": score}
 
 
+def _get_change_summary(state: ResumeAgentState) -> str:
+    """Ask the LLM to summarize changes between original and enhanced sections."""
+    llm = _get_llm(state)
+
+    original = _sections_to_text(state["sections"])
+    enhanced = _sections_to_text(state["enhanced_sections"])
+
+    prompt = CHANGE_SUMMARY_PROMPT.format(
+        original_sections=original,
+        enhanced_sections=enhanced,
+    )
+
+    response = llm.invoke(
+        [
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": prompt},
+        ]
+    )
+    return response.content
+
+
+def review_changes_node(state: ResumeAgentState) -> dict:
+    """Show changes to the user and ask for feedback. Returns revision_feedback and revision_count."""
+    if state.get("no_interactive"):
+        return {"revision_feedback": None, "revision_count": state.get("revision_count", 0)}
+
+    # Show a summary of what changed
+    console.print()
+    console.print("[bold yellow]Here's what I changed:[/]\n")
+    summary = _get_change_summary(state)
+    console.print(Panel(summary, border_style="yellow", title="Change Summary"))
+
+    console.print()
+    console.print("[bold]Options:[/]")
+    console.print("  [bold green]a[/] — Accept and save the enhanced resume")
+    console.print("  [bold yellow]f[/] — Give feedback for another revision")
+    console.print()
+
+    while True:
+        choice = console.input("[bold]Your choice (a/f): [/]").strip().lower()
+        if choice in ("a", "f"):
+            break
+        console.print("[red]  Please enter 'a' to accept or 'f' for feedback[/]")
+
+    if choice == "a":
+        return {"revision_feedback": None, "revision_count": state.get("revision_count", 0)}
+
+    console.print()
+    feedback = console.input(
+        "[bold yellow]What would you like changed? [/]\n"
+        "[dim](Be specific — e.g. 'tone down the ML bullet, I only used scikit-learn' "
+        "or 'keep the original wording for my last job')[/]\n> "
+    )
+
+    return {
+        "revision_feedback": feedback.strip() or None,
+        "revision_count": state.get("revision_count", 0) + 1,
+    }
+
+
 def write_output_node(state: ResumeAgentState) -> dict:
     """Reconstruct and write the enhanced .tex file."""
-    console.print("[bold blue]Step 7/7:[/] Writing enhanced resume...", highlight=False)
+    console.print("[bold blue]Writing enhanced resume...[/]", highlight=False)
 
     enhanced_latex = reconstruct_latex(
         state["preamble"],

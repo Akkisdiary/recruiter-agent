@@ -24,6 +24,7 @@ dependencies = [
 
 [project.scripts]
 recruiter-agent = "recruiter_agent.cli:app"
+ra = "recruiter_agent.cli:app"
 
 [build-system]
 requires = ["hatchling"]

@@ -39,3 +39,7 @@ class ResumeAgentState(TypedDict, total=False):
     # Enhanced output
     enhanced_sections: list[ResumeSection]
     enhanced_latex: str
+
+    # Review loop
+    revision_feedback: str | None
+    revision_count: int
