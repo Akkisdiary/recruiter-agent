@@ -72,33 +72,42 @@ to this JD). Most gaps are framing gaps.\
 """
 
 CLARIFICATION_PROMPT = """\
-Identify gaps where the resume is weak compared to what the JD asks for, but where the \
-candidate MIGHT have relevant experience they haven't listed.
+Ask the candidate clarifying questions to better understand their experience. You have two goals:
 
-Decide if you need to ask the candidate clarifying questions. Only ask if there are genuine \
-gaps that new information could fill — do not ask about things already well-covered in the resume. \
-Generate at most 3 focused questions. If the resume is already comprehensive for this role, \
-set needs_clarification to false.
+1. FILL GAPS: Identify where the resume is weak compared to the JD but the candidate MIGHT \
+have relevant experience they haven't listed. Ask about the underlying transferable skill, \
+not the exact domain term.
+
+2. UNDERSTAND BULLETS: For long or dense bullet points that cover multiple achievements, \
+ask the candidate to break them down so you can decide how to format, split, or trim them. \
+This gives you the context to write better, tighter bullets later.
+
+Ask as many questions as you need — there is no limit. Do not hold back. If the resume is \
+already clear and comprehensive for this role, set needs_clarification to false.
 
 CRITICAL — do not ask about exact domain experience. The candidate probably worked in a \
-different industry. Instead, ask about the UNDERLYING SKILL that transfers. If the JD says \
-"legal contract lifecycle management", don't ask "have you worked in legal?". Ask about the \
-transferable skill: "Have you managed any kind of contracts or agreements end-to-end — like \
-vendor contracts, client SOWs, or partnership agreements?"
+different industry. Ask about the UNDERLYING SKILL that transfers. If the JD says "legal \
+contract lifecycle management", ask: "Have you managed any kind of contracts or agreements \
+end-to-end — like vendor contracts, client SOWs, or partnership agreements?"
 
-IMPORTANT — question style rules:
-- Use plain, everyday language. No jargon, no buzzwords, no corporate-speak.
+Question style rules:
+- Use plain, everyday language. No jargon, no buzzwords.
 - Ask about ONE specific thing per question. Do not combine multiple topics.
-- Ask about the transferable skill, not the domain-specific version of it.
-- For each question, provide a short example_answer showing the kind of response you are \
-looking for. The example should be from a DIFFERENT domain than the JD to show the candidate \
-that analogous experience counts.
+- For gap questions, provide a short example_answer from a DIFFERENT domain than the JD.
+- For bullet clarification questions, quote the bullet and ask what the candidate wants \
+to highlight or if it covers separate achievements.
 
-Good example:
+Good examples:
   question: "Have you set up or managed any automated workflows — like CI/CD pipelines, \
 automated reports, or approval chains?"
   example_answer: "I set up a GitHub Actions pipeline that ran tests and deployed to staging \
 automatically when we merged PRs."
+
+  question: "Your bullet about leading the Selenium-to-Puppeteer migration covers architecture \
+docs, building the service, CI/CD, canary rollout, load testing, and cost savings. Which of \
+these do you want to highlight most, or are there parts that could be their own bullet?"
+  example_answer: "The key achievement was the performance improvement and cost savings. \
+The CI/CD and canary rollout were standard process, not worth calling out separately."
 
 Bad example (too literal, demands exact domain match):
   question: "Can you elaborate on your experience with legal workflow automation and \
@@ -119,7 +128,7 @@ Write in PLAIN TEXT using this format:
 LENGTH — this is the MOST IMPORTANT rule:
 - The resume MUST fit on 1 page. Maximum 2 pages ONLY if the candidate has 5+ years of \
 highly relevant experience.
-- CUT aggressively: merge related bullets, remove the weakest bullets, shorten wordy descriptions.
+- CUT aggressively: remove the weakest/least-relevant bullets, shorten wordy descriptions.
 - A tight 1-page resume beats a padded 2-page one.
 
 HONESTY:

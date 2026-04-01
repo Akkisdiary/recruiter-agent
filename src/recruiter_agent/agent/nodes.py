@@ -250,11 +250,12 @@ def ask_clarifications_node(state: ResumeAgentState) -> dict:
     new_messages = [user_msg]
 
     if clarification.needs_clarification and clarification.questions:
+        total = len(clarification.questions)
         console.print(
-            "\n[bold yellow]I need to ask you a few questions to strengthen your resume:[/]\n"
+            f"\n[bold yellow]I have {total} questions to strengthen your resume:[/]\n"
         )
         for i, q in enumerate(clarification.questions, 1):
-            console.print(f"[bold]{i}. {q.question}[/]")
+            console.print(f"[bold]({i}/{total}) {q.question}[/]")
             console.print(f"[dim]   Example: {q.example_answer}[/]")
             answer = console.input(
                 "[dim]Your answer (press Enter to skip): [/]"
