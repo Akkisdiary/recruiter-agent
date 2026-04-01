@@ -1,17 +1,21 @@
 import json
 from pathlib import Path
 
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from rich.console import Console
 from rich.panel import Panel
 
 from recruiter_agent.agent.prompts import (
     CHANGE_SUMMARY_PROMPT,
     CLARIFICATION_PROMPT,
-    ENHANCEMENT_PROMPT,
     JD_ANALYSIS_PROMPT,
-    REVISION_PROMPT,
+    RECRUITER_INSTRUCTION_PROMPT,
+    RECRUITER_REVISION_PROMPT,
+    RECRUITER_SYSTEM_PROMPT,
     SCORING_PROMPT,
-    SYSTEM_PROMPT,
+    WRITER_ENHANCE_PROMPT,
+    WRITER_REVISION_PROMPT,
+    WRITER_SYSTEM_PROMPT,
 )
 from recruiter_agent.agent.state import ResumeAgentState
 from recruiter_agent.config import get_llm
@@ -21,6 +25,7 @@ from recruiter_agent.models.schemas import (
     ClarifyingQA,
     EnhancedSections,
     JDAnalysis,
+    ResumeContent,
     ResumeSection,
 )
 from recruiter_agent.tools.latex import (
@@ -59,9 +64,24 @@ def _sections_to_text(sections: list[ResumeSection]) -> str:
     return "\n\n".join(parts)
 
 
+def _format_content_for_writer(content: ResumeContent) -> str:
+    """Render ResumeContent as readable text for the writer agent."""
+    parts = []
+    for section in content.sections:
+        parts.append(f"--- Section: {section.name} ---")
+        parts.append(section.content)
+        parts.append("")
+    return "\n".join(parts)
+
+
+# --- Utility nodes (no agent context needed) ---
+
+
 def parse_resume_node(state: ResumeAgentState) -> dict:
     """Parse the LaTeX resume into preamble, sections, and postamble."""
-    console.print("[bold blue]Step 1:[/] Parsing resume...", highlight=False)
+    console.print(
+        "[bold blue]Step 1:[/] Parsing resume...", highlight=False
+    )
 
     file_path = Path(state["resume_path"])
     raw_latex = file_path.read_text(encoding="utf-8")
@@ -106,7 +126,7 @@ def scrape_jd_node(state: ResumeAgentState) -> dict:
     prompt = JD_ANALYSIS_PROMPT.format(jd_text=jd_text)
     jd_analysis = structured_llm.invoke(
         [
-            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "system", "content": RECRUITER_SYSTEM_PROMPT},
             {"role": "user", "content": prompt},
         ]
     )
@@ -115,7 +135,9 @@ def scrape_jd_node(state: ResumeAgentState) -> dict:
         console.print(
             f"  Role: {jd_analysis.job_title} at {jd_analysis.company}"
         )
-        console.print(f"  Keywords: {', '.join(jd_analysis.keywords[:10])}...")
+        console.print(
+            f"  Keywords: {', '.join(jd_analysis.keywords[:10])}..."
+        )
 
     return {
         "jd_raw_text": jd_text,
@@ -123,14 +145,21 @@ def scrape_jd_node(state: ResumeAgentState) -> dict:
     }
 
 
-def _score_resume(
-    state: ResumeAgentState, sections: list[ResumeSection]
-) -> ATSScore:
-    """Score resume sections against the JD."""
+# --- Recruiter Agent nodes ---
+
+
+def score_before_node(state: ResumeAgentState) -> dict:
+    """Score the original resume and seed the recruiter's message history."""
+    console.print(
+        "[bold blue]Step 3:[/] Scoring original resume...", highlight=False
+    )
+
     llm = _get_llm(state)
     structured_llm = llm.with_structured_output(ATSScore)
 
     jd = state["jd_analysis"]
+    resume_text = _sections_to_text(state["sections"])
+
     prompt = SCORING_PROMPT.format(
         job_title=jd.job_title,
         company=jd.company,
@@ -139,24 +168,15 @@ def _score_resume(
         responsibilities=", ".join(jd.responsibilities),
         qualifications=", ".join(jd.qualifications),
         keywords=", ".join(jd.keywords),
-        resume_content=_sections_to_text(sections),
+        resume_content=resume_text,
     )
 
-    return structured_llm.invoke(
+    score = structured_llm.invoke(
         [
-            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "system", "content": RECRUITER_SYSTEM_PROMPT},
             {"role": "user", "content": prompt},
         ]
     )
-
-
-def score_before_node(state: ResumeAgentState) -> dict:
-    """Score the original resume against the JD."""
-    console.print(
-        "[bold blue]Step 3:[/] Scoring original resume...", highlight=False
-    )
-
-    score = _score_resume(state, state["sections"])
 
     if state.get("verbose"):
         console.print(f"  Overall: {score.overall}/100")
@@ -173,12 +193,45 @@ def score_before_node(state: ResumeAgentState) -> dict:
         )
     )
 
-    return {"before_score": score}
+    # Seed the recruiter's message history with full context
+    jd_summary = (
+        f"Job: {jd.job_title} at {jd.company}\n"
+        f"Required: {', '.join(jd.required_skills)}\n"
+        f"Preferred: {', '.join(jd.preferred_skills)}\n"
+        f"Responsibilities: {', '.join(jd.responsibilities)}\n"
+        f"Keywords: {', '.join(jd.keywords)}"
+    )
+    context_msg = HumanMessage(
+        content=(
+            f"Here is the candidate's resume:\n\n{resume_text}\n\n"
+            f"Here is the job description analysis:\n\n{jd_summary}\n\n"
+            f"ATS Score: {score.overall}/100\n"
+            f"Feedback: {score.feedback}\n"
+            f"Missing keywords: {', '.join(score.missing_keywords)}"
+        )
+    )
+    ack_msg = AIMessage(
+        content=(
+            f"I've reviewed the resume against the JD. "
+            f"Score is {score.overall}/100. {score.feedback}"
+        )
+    )
+
+    return {
+        "before_score": score,
+        "recruiter_messages": [
+            SystemMessage(content=RECRUITER_SYSTEM_PROMPT),
+            context_msg,
+            ack_msg,
+        ],
+    }
 
 
 def ask_clarifications_node(state: ResumeAgentState) -> dict:
-    """Optionally ask the user clarifying questions about their experience."""
-    console.print("[bold blue]Step 4:[/] Checking for gaps...", highlight=False)
+    """Ask clarifying questions using the recruiter's accumulated context."""
+    console.print(
+        "[bold blue]Step 4:[/] Checking for gaps...", highlight=False
+    )
 
     if state.get("no_interactive"):
         console.print("  Skipped (non-interactive mode)")
@@ -187,26 +240,15 @@ def ask_clarifications_node(state: ResumeAgentState) -> dict:
     llm = _get_llm(state)
     structured_llm = llm.with_structured_output(ClarificationRequest)
 
-    jd = state["jd_analysis"]
-    score = state["before_score"]
-    prompt = CLARIFICATION_PROMPT.format(
-        job_title=jd.job_title,
-        required_skills=", ".join(jd.required_skills),
-        preferred_skills=", ".join(jd.preferred_skills),
-        keywords=", ".join(jd.keywords),
-        resume_content=_sections_to_text(state["sections"]),
-        feedback=score.feedback,
-        missing_keywords=", ".join(score.missing_keywords),
-    )
+    # Use recruiter's message history + clarification request
+    user_msg = HumanMessage(content=CLARIFICATION_PROMPT)
+    messages = list(state.get("recruiter_messages", [])) + [user_msg]
 
-    clarification = structured_llm.invoke(
-        [
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": prompt},
-        ]
-    )
+    clarification = structured_llm.invoke(messages)
 
     qa_pairs: list[ClarifyingQA] = []
+    new_messages = [user_msg]
+
     if clarification.needs_clarification and clarification.questions:
         console.print(
             "\n[bold yellow]I need to ask you a few questions to strengthen your resume:[/]\n"
@@ -219,37 +261,125 @@ def ask_clarifications_node(state: ResumeAgentState) -> dict:
             )
             if answer.strip():
                 qa_pairs.append(
-                    ClarifyingQA(question=q.question, answer=answer.strip())
+                    ClarifyingQA(
+                        question=q.question, answer=answer.strip()
+                    )
                 )
         console.print()
+
+        # Add Q&A to recruiter's history so it remembers the answers
+        if qa_pairs:
+            qa_text = "Candidate's answers:\n"
+            for qa in qa_pairs:
+                qa_text += f"Q: {qa.question}\nA: {qa.answer}\n"
+            new_messages.append(
+                AIMessage(content="I asked clarifying questions.")
+            )
+            new_messages.append(HumanMessage(content=qa_text))
+        else:
+            new_messages.append(
+                AIMessage(
+                    content="I asked questions but the candidate skipped them."
+                )
+            )
     else:
         console.print("  No clarifications needed")
+        new_messages.append(
+            AIMessage(content="No clarifications needed.")
+        )
 
-    return {"clarifying_qa": qa_pairs}
+    return {
+        "clarifying_qa": qa_pairs,
+        "recruiter_messages": new_messages,
+    }
 
 
-def enhance_resume_node(state: ResumeAgentState) -> dict:
-    """Enhance the resume sections based on JD analysis, scores, and optional revision feedback."""
+def recruiter_instruct_node(state: ResumeAgentState) -> dict:
+    """Recruiter writes the final resume content in plain text."""
+    console.print(
+        "[bold blue]Step 5:[/] Writing enhanced content...", highlight=False
+    )
+
+    llm = _get_llm(state)
+    structured_llm = llm.with_structured_output(ResumeContent)
+
+    user_msg = HumanMessage(content=RECRUITER_INSTRUCTION_PROMPT)
+    messages = list(state.get("recruiter_messages", [])) + [user_msg]
+
+    content = structured_llm.invoke(messages)
+
+    if state.get("verbose"):
+        console.print(
+            f"  Sections: {[s.name for s in content.sections]}"
+        )
+
+    ai_msg = AIMessage(content=content.model_dump_json())
+
+    return {
+        "resume_content": content,
+        "recruiter_messages": [user_msg, ai_msg],
+    }
+
+
+def recruiter_revise_instruct_node(state: ResumeAgentState) -> dict:
+    """Recruiter rewrites the resume content based on user feedback."""
     revision_count = state.get("revision_count", 0)
-    revision_feedback = state.get("revision_feedback")
-    is_revision = revision_count > 0 and revision_feedback
+    console.print(
+        f"[bold blue]Revision {revision_count}:[/] Revising content...",
+        highlight=False,
+    )
+
+    llm = _get_llm(state)
+    structured_llm = llm.with_structured_output(ResumeContent)
+
+    revision_feedback = state.get("revision_feedback", "")
+    user_msg = HumanMessage(
+        content=RECRUITER_REVISION_PROMPT.format(
+            revision_feedback=revision_feedback,
+        )
+    )
+    messages = list(state.get("recruiter_messages", [])) + [user_msg]
+
+    content = structured_llm.invoke(messages)
+
+    if state.get("verbose"):
+        console.print(
+            f"  Revised sections: {[s.name for s in content.sections]}"
+        )
+
+    ai_msg = AIMessage(content=content.model_dump_json())
+
+    return {
+        "resume_content": content,
+        "recruiter_messages": [user_msg, ai_msg],
+    }
+
+
+# --- LaTeX Expert (Writer) Agent nodes ---
+
+
+def latex_expert_enhance_node(state: ResumeAgentState) -> dict:
+    """Writer formats the recruiter's plain text content into LaTeX."""
+    revision_count = state.get("revision_count", 0)
+    is_revision = revision_count > 0 and state.get("revision_feedback")
 
     if is_revision:
         console.print(
-            f"[bold blue]Revision {revision_count}:[/] Revising resume based on your feedback...",
+            f"[bold blue]Revision {revision_count}:[/] Formatting to LaTeX...",
             highlight=False,
         )
     else:
         console.print(
-            "[bold blue]Step 5:[/] Enhancing resume...", highlight=False
+            "[bold blue]Step 6:[/] Formatting to LaTeX...", highlight=False
         )
 
     llm = _get_llm(state)
     structured_llm = llm.with_structured_output(EnhancedSections)
 
-    jd = state["jd_analysis"]
+    content = state["resume_content"]
+    content_text = _format_content_for_writer(content)
 
-    # Separate header from content sections — header is never sent to LLM
+    # Separate header from content sections (for reference)
     header_section = None
     content_sections = []
     source_sections = (
@@ -267,47 +397,27 @@ def enhance_resume_node(state: ResumeAgentState) -> dict:
     )
 
     if is_revision:
-        prompt = REVISION_PROMPT.format(
-            job_title=jd.job_title,
-            company=jd.company,
-            required_skills=", ".join(jd.required_skills),
-            preferred_skills=", ".join(jd.preferred_skills),
-            responsibilities=", ".join(jd.responsibilities),
-            keywords=", ".join(jd.keywords),
-            revision_feedback=revision_feedback,
+        prompt_text = WRITER_REVISION_PROMPT.format(
+            resume_content=content_text,
             sections_json=sections_json,
         )
     else:
-        score = state["before_score"]
-        qa_pairs = state.get("clarifying_qa", [])
-        if qa_pairs:
-            qa_text = "Candidate's answers to clarifying questions:\n"
-            for qa in qa_pairs:
-                qa_text += f"Q: {qa.question}\nA: {qa.answer}\n\n"
-            clarification_context = qa_text
-        else:
-            clarification_context = "No additional information from candidate."
-
-        prompt = ENHANCEMENT_PROMPT.format(
-            job_title=jd.job_title,
-            company=jd.company,
-            required_skills=", ".join(jd.required_skills),
-            preferred_skills=", ".join(jd.preferred_skills),
-            responsibilities=", ".join(jd.responsibilities),
-            keywords=", ".join(jd.keywords),
-            before_score=score.overall,
-            missing_keywords=", ".join(score.missing_keywords),
-            feedback=score.feedback,
-            clarification_context=clarification_context,
+        prompt_text = WRITER_ENHANCE_PROMPT.format(
+            resume_content=content_text,
             sections_json=sections_json,
         )
 
-    result = structured_llm.invoke(
-        [
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": prompt},
+    # Writer gets its own message history
+    user_msg = HumanMessage(content=prompt_text)
+    if is_revision:
+        messages = list(state.get("writer_messages", [])) + [user_msg]
+    else:
+        messages = [
+            SystemMessage(content=WRITER_SYSTEM_PROMPT),
+            user_msg,
         ]
-    )
+
+    result = structured_llm.invoke(messages)
 
     # Post-process: fix collapsed LaTeX formatting
     enhanced = []
@@ -315,15 +425,34 @@ def enhance_resume_node(state: ResumeAgentState) -> dict:
         enhanced.append(header_section)
     for s in result.sections:
         if s.name == "__header__":
-            continue  # skip if LLM returned it anyway
+            continue
         enhanced.append(
-            ResumeSection(name=s.name, content=_postprocess_section(s.content))
+            ResumeSection(
+                name=s.name, content=_postprocess_section(s.content)
+            )
         )
 
     if state.get("verbose"):
-        console.print(f"  Enhanced {len(enhanced)} sections")
+        console.print(f"  Formatted {len(enhanced)} sections")
 
-    return {"enhanced_sections": enhanced}
+    ai_msg = AIMessage(content="Formatted to LaTeX.")
+    new_writer_messages = (
+        [user_msg, ai_msg]
+        if is_revision
+        else [
+            SystemMessage(content=WRITER_SYSTEM_PROMPT),
+            user_msg,
+            ai_msg,
+        ]
+    )
+
+    return {
+        "enhanced_sections": enhanced,
+        "writer_messages": new_writer_messages,
+    }
+
+
+# --- Scoring (uses recruiter context) ---
 
 
 def score_after_node(state: ResumeAgentState) -> dict:
@@ -336,10 +465,31 @@ def score_after_node(state: ResumeAgentState) -> dict:
         )
     else:
         console.print(
-            "[bold blue]Step 6:[/] Scoring enhanced resume...", highlight=False
+            "[bold blue]Step 7:[/] Scoring enhanced resume...",
+            highlight=False,
         )
 
-    score = _score_resume(state, state["enhanced_sections"])
+    llm = _get_llm(state)
+    structured_llm = llm.with_structured_output(ATSScore)
+
+    jd = state["jd_analysis"]
+    prompt = SCORING_PROMPT.format(
+        job_title=jd.job_title,
+        company=jd.company,
+        required_skills=", ".join(jd.required_skills),
+        preferred_skills=", ".join(jd.preferred_skills),
+        responsibilities=", ".join(jd.responsibilities),
+        qualifications=", ".join(jd.qualifications),
+        keywords=", ".join(jd.keywords),
+        resume_content=_sections_to_text(state["enhanced_sections"]),
+    )
+
+    score = structured_llm.invoke(
+        [
+            {"role": "system", "content": RECRUITER_SYSTEM_PROMPT},
+            {"role": "user", "content": prompt},
+        ]
+    )
 
     console.print(
         Panel(
@@ -352,7 +502,22 @@ def score_after_node(state: ResumeAgentState) -> dict:
         )
     )
 
-    return {"after_score": score}
+    # Add score to recruiter's history for revision context
+    score_msg = HumanMessage(
+        content=(
+            f"Enhanced resume scored {score.overall}/100. "
+            f"Feedback: {score.feedback}"
+        )
+    )
+    ack_msg = AIMessage(content="Noted the after-score.")
+
+    return {
+        "after_score": score,
+        "recruiter_messages": [score_msg, ack_msg],
+    }
+
+
+# --- Review & output nodes ---
 
 
 def _get_change_summary(state: ResumeAgentState) -> str:
@@ -369,7 +534,7 @@ def _get_change_summary(state: ResumeAgentState) -> str:
 
     response = llm.invoke(
         [
-            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "system", "content": RECRUITER_SYSTEM_PROMPT},
             {"role": "user", "content": prompt},
         ]
     )
@@ -377,27 +542,34 @@ def _get_change_summary(state: ResumeAgentState) -> str:
 
 
 def review_changes_node(state: ResumeAgentState) -> dict:
-    """Show changes to the user and ask for feedback. Returns revision_feedback and revision_count."""
+    """Show changes to the user and ask for feedback."""
     if state.get("no_interactive"):
         return {
             "revision_feedback": None,
             "revision_count": state.get("revision_count", 0),
         }
 
-    # Show a summary of what changed
     console.print()
     console.print("[bold yellow]Here's what I changed:[/]\n")
     summary = _get_change_summary(state)
-    console.print(Panel(summary, border_style="yellow", title="Change Summary"))
+    console.print(
+        Panel(summary, border_style="yellow", title="Change Summary")
+    )
 
     console.print()
     console.print("[bold]Options:[/]")
-    console.print("  [bold green]a[/] — Accept and save the enhanced resume")
-    console.print("  [bold yellow]f[/] — Give feedback for another revision")
+    console.print(
+        "  [bold green]a[/] — Accept and save the enhanced resume"
+    )
+    console.print(
+        "  [bold yellow]f[/] — Give feedback for another revision"
+    )
     console.print()
 
     while True:
-        choice = console.input("[bold]Your choice (a/f): [/]").strip().lower()
+        choice = (
+            console.input("[bold]Your choice (a/f): [/]").strip().lower()
+        )
         if choice in ("a", "f"):
             break
         console.print(
@@ -425,7 +597,9 @@ def review_changes_node(state: ResumeAgentState) -> dict:
 
 def write_output_node(state: ResumeAgentState) -> dict:
     """Reconstruct and write the enhanced .tex file."""
-    console.print("[bold blue]Writing enhanced resume...[/]", highlight=False)
+    console.print(
+        "[bold blue]Writing enhanced resume...[/]", highlight=False
+    )
 
     enhanced_latex = reconstruct_latex(
         state["preamble"],
@@ -433,16 +607,15 @@ def write_output_node(state: ResumeAgentState) -> dict:
         state["enhanced_sections"],
     )
 
-    # Validate only the document body (between \begin{document} and \end{document})
-    # to avoid false positives on LaTeX comments in the preamble
-    body_content = "\n".join(s.content for s in state["enhanced_sections"])
+    body_content = "\n".join(
+        s.content for s in state["enhanced_sections"]
+    )
     warnings = validate_latex(body_content)
     if warnings:
         console.print("[yellow]LaTeX validation warnings:[/]")
         for w in warnings:
             console.print(f"  [yellow]- {w}[/]")
 
-    # Write output
     output_path = Path(state["output_path"])
     output_path.write_text(enhanced_latex, encoding="utf-8")
 

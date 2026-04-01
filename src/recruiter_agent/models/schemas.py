@@ -87,3 +87,21 @@ class EnhancedSections(BaseModel):
     sections: list[ResumeSection] = Field(
         description="Enhanced resume sections with modified LaTeX content"
     )
+
+
+class PlainTextSection(BaseModel):
+    name: str = Field(
+        description="Section name matching the original resume, e.g. 'Experience', 'Skills'"
+    )
+    content: str = Field(
+        description="The full section content in plain text. "
+        "Use **double asterisks** around text that should be bolded. "
+        "Use bullet points starting with '- ' for list items. "
+        "Preserve company names, roles, and dates on their own lines."
+    )
+
+
+class ResumeContent(BaseModel):
+    sections: list[PlainTextSection] = Field(
+        description="All resume sections in order, with final content ready to be formatted into LaTeX"
+    )

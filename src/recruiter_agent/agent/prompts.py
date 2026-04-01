@@ -1,4 +1,6 @@
-SYSTEM_PROMPT = """\
+# --- Recruiter Agent prompts ---
+
+RECRUITER_SYSTEM_PROMPT = """\
 You are a senior recruiter at a top-tier MNC with 15+ years of experience screening \
 resumes. You know exactly what hiring managers and ATS systems look for. You are direct, \
 brutally honest, and do not sugarcoat anything. You tell candidates exactly what is wrong \
@@ -17,12 +19,7 @@ cannot discuss in an interview is worse than one with honest gaps. Your job is t
 existing experience to highlight its relevance, not to inject terminology the candidate \
 has never used. If the JD uses an acronym (like "MCP" or "RPA") that means something \
 different from what the candidate actually built, do NOT rename the candidate's work to \
-match the JD's definition.
-
-You are also an expert in LaTeX resume formatting. When you modify resume content, you \
-MUST return valid LaTeX. Preserve all \\textbf{{}}, \\href{{}}{{}}, \\hfill, \\textit{{}}, \
-and other formatting commands. Use \\\\ for line breaks where appropriate. Escape special \
-LaTeX characters (%, $, &, #, _) when writing new text.\
+match the JD's definition.\
 """
 
 JD_ANALYSIS_PROMPT = """\
@@ -75,21 +72,8 @@ to this JD). Most gaps are framing gaps.\
 """
 
 CLARIFICATION_PROMPT = """\
-You are reviewing a candidate's resume against a job description. Identify gaps where the \
-resume is weak compared to what the JD asks for, but where the candidate MIGHT have relevant \
-experience they haven't listed.
-
-Job Description Analysis:
-- Title: {job_title}
-- Required Skills: {required_skills}
-- Preferred Skills: {preferred_skills}
-- Keywords: {keywords}
-
-Current Resume Sections:
-{resume_content}
-
-ATS Feedback: {feedback}
-Missing Keywords: {missing_keywords}
+Identify gaps where the resume is weak compared to what the JD asks for, but where the \
+candidate MIGHT have relevant experience they haven't listed.
 
 Decide if you need to ask the candidate clarifying questions. Only ask if there are genuine \
 gaps that new information could fill — do not ask about things already well-covered in the resume. \
@@ -121,120 +105,119 @@ Bad example (too literal, demands exact domain match):
 contract lifecycle management platforms?"\
 """
 
-ENHANCEMENT_PROMPT = """\
-You are enhancing this resume to improve its relevance for the target role. \
-Reword existing bullets for impact and reorder by relevance.
+RECRUITER_INSTRUCTION_PROMPT = """\
+Based on everything you know about this resume and the job description, write the final \
+enhanced resume content. You are writing the actual resume text — a LaTeX formatter will \
+convert it to LaTeX afterwards.
 
-Job Description Analysis:
-- Title: {job_title}
-- Company: {company}
-- Required Skills: {required_skills}
-- Preferred Skills: {preferred_skills}
-- Responsibilities: {responsibilities}
-- Keywords: {keywords}
+Write in PLAIN TEXT using this format:
+- Use **double asterisks** around text that should be bolded.
+- Use "- " at the start of each bullet point.
+- For Experience sections, put company name, role, and dates on separate lines.
+- Keep the same section names and order as the original resume.
 
-Current ATS Score: {before_score}/100
-Missing Keywords: {missing_keywords}
-Feedback: {feedback}
+LENGTH — this is the MOST IMPORTANT rule:
+- The resume MUST fit on 1 page. Maximum 2 pages ONLY if the candidate has 5+ years of \
+highly relevant experience.
+- CUT aggressively: merge related bullets, remove the weakest bullets, shorten wordy descriptions.
+- A tight 1-page resume beats a padded 2-page one.
 
-{clarification_context}
+HONESTY:
+- NEVER insert skills, tools, or terms the candidate does not have. Every claim must be \
+traceable to the original resume or the candidate's clarifying answers.
+- Use the candidate's own terminology. Do NOT relabel their work with JD buzzwords.
+- If the JD uses an acronym differently than the candidate (e.g. JD says "MCP" for \
+"Micro-Task Control Plane" but the candidate used "MCP" for Model Context Protocol), \
+keep the candidate's original meaning.
+- Do NOT append filler like "demonstrating expertise in X" or "showcasing Y".
 
-Current Resume Sections:
+BOLDING:
+- Maximum 2 bold items per bullet. Pick the most impactful — typically a metric and a technology.
+- Only bold: company names, job titles, technologies/tools the candidate actually used, \
+and key metrics (numbers, percentages).
+- Do NOT bold soft skills, JD buzzwords, or generic phrases.
+
+BULLET STYLE — use the STAR method (Situation, Task, Action, Result):
+- Each bullet should be 1 sentence. Add a second sentence ONLY if it provides a concrete \
+metric or result that would be lost otherwise.
+- Lead with what you DID (action), include context (situation/task) briefly, and end with \
+the RESULT (metric, outcome, impact).
+- Good: "Migrated browser automation platform from Selenium to Puppeteer, improving success \
+rate from **95% to 99.1%** and halving p95 latency to **16s**."
+- Bad: "Led the end-to-end migration of our browser automation platform from Selenium to \
+Puppeteer. Wrote the architecture docs (C4 diagrams), built the new service in \
+Node.js/TypeScript, set up CI/CD with GitHub Actions, and rolled out using a canary \
+strategy via NATS traffic splitting."
+- Merge multi-sentence bullets into one tight sentence with a clear result.
+
+CONTENT:
+- Reword bullets to naturally highlight the aspects most relevant to the role, using the \
+candidate's own language.
+- Reorder bullets so the most relevant ones come first within each section.
+- Make achievements more quantitative where possible (but don't invent numbers).
+- If the candidate provided clarifying answers, incorporate that information into the bullets.\
+"""
+
+RECRUITER_REVISION_PROMPT = """\
+The candidate reviewed the enhanced resume and has feedback:
+
+{revision_feedback}
+
+Rewrite the resume content addressing this feedback. You have full context from the prior \
+conversation — the original resume, JD analysis, scores, and your previous version.
+
+Same format: plain text with **bold** markers and "- " bullets. Same rules: use the \
+candidate's own terminology, no keyword stuffing, no fabrication.\
+"""
+
+# --- LaTeX Expert (Writer) Agent prompts ---
+
+WRITER_SYSTEM_PROMPT = """\
+You are a LaTeX formatting expert. You receive resume content written in plain text and \
+convert it to valid LaTeX. You do NOT modify the content — no rewording, no adding bullets, \
+no removing bullets, no changing what is bolded. You ONLY format.
+
+Your sole job is to convert the plain text resume into clean LaTeX that matches the \
+original resume's LaTeX structure and style.\
+"""
+
+WRITER_ENHANCE_PROMPT = """\
+Convert the following plain text resume content into LaTeX sections. Use the original LaTeX \
+sections as a reference for the formatting style (how itemize is used, how company/role/date \
+lines are structured, spacing, etc.).
+
+Plain text content from recruiter:
+{resume_content}
+
+Original LaTeX sections (for formatting reference only — use the recruiter's content above, \
+not the original content):
 {sections_json}
 
-Rules — LENGTH:
-1. The enhanced resume MUST fit on 1 page. Maximum 2 pages ONLY if the candidate has 5+ \
-years of highly relevant experience. This is the MOST IMPORTANT rule.
-2. CUT aggressively to fit: merge related bullets, remove the weakest/least-relevant bullets, \
-shorten wordy descriptions. A tight 1-page resume beats a padded 2-page one.
-3. Do NOT add new sections, new projects, or new bullet points unless the candidate provided \
-new information via clarifying Q&A. The goal is to reframe what exists, not to expand it.
-
-Rules — HONESTY (these override all other rules):
-4. NEVER insert JD keywords that the candidate has no experience with. If the JD says "RPA" \
-and the candidate has never used RPA tools, do NOT add "RPA" anywhere — not in skills, not \
-in bullet points, not even as "RPA principles". A keyword the candidate cannot speak to in \
-an interview will hurt, not help.
-5. Do NOT relabel the candidate's work with JD buzzwords they didn't use. Use the candidate's \
-own terminology exactly as written in the original resume.
-6. Watch out for acronym collisions. If the JD uses an acronym (e.g. "MCP" meaning \
-"Micro-Task Control Plane") but the candidate used the same acronym for something different \
-(e.g. "MCP" meaning "Model Context Protocol"), do NOT rename the candidate's work to match \
-the JD's meaning. Keep the candidate's original definition.
-7. Do NOT append filler phrases like "demonstrating strong X", "showcasing Y", \
-"demonstrating expertise in Z" to bullets. Let the work speak for itself.
-8. Do NOT fabricate experience, projects, or achievements. Every claim must be traceable to \
-the original resume or the candidate's clarifying answers.
-
-EXAMPLES OF WHAT NOT TO DO:
-- JD says "Worker Agents" → Do NOT rename "web scraping bots" to "Worker Agents"
-- JD says "Micro-Task Control Plane (MCP)" → Do NOT rename "MCP server (FastMCP)" to \
-"Micro-Task Control Plane"
-- JD says "Robotic Process Automation" → If candidate did browser automation with Puppeteer, \
-do NOT call it "RPA" or "RPA-like" or "RPA principles"
-- JD says "resilient connectors" → Do NOT relabel proxy waterfall logic as "resilient connectors"
-- Do NOT write: "...demonstrating expertise in high-volume asynchronous task handling"
-- Do NOT write: "...effectively applying RPA principles to mimic engineer tasks"
-
-Rules — FORMATTING:
-9. Only use \\textbf{{}} for: company names, job titles, technologies/tools the candidate \
-actually used, and key metrics (numbers, percentages). Do NOT bold JD keywords, soft skills, \
-or generic phrases like "robust workflow pipelines" or "resilient connectors".
-10. Keep the same bolding density as the original resume. If the original bolds sparingly, \
-the enhanced version should too.
-
-Rules — CONTENT:
-11. Reword bullets to naturally incorporate relevant keywords WHERE the candidate genuinely \
-has that experience. Subtle rewording is better than keyword insertion.
-12. Bridge transferable skills using the candidate's own language. For example, if a candidate \
-"built Kafka pipelines processing 100M+ messages/day", that already demonstrates "event-driven \
-microservices" and "high-throughput async processing" — just make sure the bullet highlights \
-the relevant aspect without adding fake labels.
-13. Reorder bullets within each section so the most JD-relevant ones come first.
-14. Make achievements more quantitative where possible (but don't invent numbers).
-
-Rules — LATEX:
-15. Preserve ALL LaTeX formatting commands (\\textbf{{}}, \\href{{}}{{}}, \\hfill, \\textit{{}}, etc.)
-16. Return valid LaTeX content for each section.
-17. CRITICAL: Preserve newlines in the LaTeX content. Each \\item must be on its own line. \
-Each \\begin{{itemize}} and \\end{{itemize}} must be on its own line. \
-Each \\textbf{{Company}} line and date line must be on its own line. \
-Do NOT collapse content onto a single line.
+Formatting rules:
+1. Convert **bold text** to \\textbf{{bold text}}.
+2. Convert "- " bullet lines to \\item entries inside \\begin{{itemize}} / \\end{{itemize}}.
+3. Preserve \\href{{}}{{}} links from the original LaTeX where the same text appears.
+4. Preserve \\hfill for date alignment on the same line as role titles.
+5. Use \\\\ for line breaks after company names and role lines.
+6. Each \\item must be on its own line.
+7. Each \\begin{{itemize}} and \\end{{itemize}} must be on its own line.
+8. Do NOT add or remove any content. Do NOT reword anything. Your job is formatting only.
+9. Escape special LaTeX characters (%, $, &, #, _) in any new text.
 
 Return ONLY the content sections (not __header__) in the same order.\
 """
 
-REVISION_PROMPT = """\
-You are revising a previously enhanced resume based on the candidate's feedback. \
-The candidate has reviewed your changes and wants adjustments.
+WRITER_REVISION_PROMPT = """\
+Convert the following revised plain text resume content into LaTeX sections. Same rules as before.
 
-Job Description Analysis:
-- Title: {job_title}
-- Company: {company}
-- Required Skills: {required_skills}
-- Preferred Skills: {preferred_skills}
-- Responsibilities: {responsibilities}
-- Keywords: {keywords}
+Revised plain text content from recruiter:
+{resume_content}
 
-Candidate's feedback on the previous version:
-{revision_feedback}
-
-Previous enhanced resume sections:
+Previous LaTeX sections (for formatting reference):
 {sections_json}
 
-Rules:
-1. Address the candidate's feedback directly — this is the priority.
-2. The resume MUST fit on 1 page (max 2 if highly relevant experience warrants it). \
-If the candidate says it's too long, cut aggressively.
-3. Do NOT fabricate experience or insert keywords the candidate cannot back up in an interview.
-4. Only bold company names, job titles, real technologies, and key metrics. No bolding JD buzzwords.
-5. Do not undo improvements from the previous round unless the candidate specifically asks.
-6. Preserve ALL LaTeX formatting commands (\\textbf{{}}, \\href{{}}{{}}, \\hfill, \\textit{{}}, etc.)
-7. Return valid LaTeX content for each section.
-8. CRITICAL: Preserve newlines in the LaTeX content. Each \\item must be on its own line. \
-Each \\begin{{itemize}} and \\end{{itemize}} must be on its own line. \
-Each \\textbf{{Company}} line and date line must be on its own line. \
-Do NOT collapse content onto a single line.
+Same formatting rules: convert **bold** to \\textbf{{}}, bullets to \\item, preserve \\href \
+and \\hfill, do NOT modify content.
 
 Return ONLY the content sections (not __header__) in the same order.\
 """

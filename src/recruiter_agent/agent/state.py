@@ -1,9 +1,13 @@
-from typing import TypedDict
+from typing import Annotated, TypedDict
+
+from langchain_core.messages import BaseMessage
+from langgraph.graph.message import add_messages
 
 from recruiter_agent.models.schemas import (
     ATSScore,
     ClarifyingQA,
     JDAnalysis,
+    ResumeContent,
     ResumeSection,
 )
 
@@ -36,6 +40,9 @@ class ResumeAgentState(TypedDict, total=False):
     # Clarification
     clarifying_qa: list[ClarifyingQA]
 
+    # Resume content (recruiter -> writer contract)
+    resume_content: ResumeContent
+
     # Enhanced output
     enhanced_sections: list[ResumeSection]
     enhanced_latex: str
@@ -43,3 +50,7 @@ class ResumeAgentState(TypedDict, total=False):
     # Review loop
     revision_feedback: str | None
     revision_count: int
+
+    # Per-agent message histories (add_messages appends, not replaces)
+    recruiter_messages: Annotated[list[BaseMessage], add_messages]
+    writer_messages: Annotated[list[BaseMessage], add_messages]

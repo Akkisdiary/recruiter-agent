@@ -27,30 +27,39 @@ No tests exist yet. No CI/CD configured.
 
 ## Architecture
 
-The app is a LangGraph `StateGraph` with 8 nodes and a review loop, orchestrated from `agent/graph.py`:
+Two-agent architecture with persistent message history, orchestrated as a single LangGraph `StateGraph` in `agent/graph.py`:
 
 ```
-parse_resume → scrape_jd → score_before → ask_clarifications → enhance_resume → score_after → review_changes
-                                                                     ^                              |
-                                                                     |     (user gives feedback)     |
-                                                                     +-------------------------------+
-                                                                                    |
-                                                                              (user accepts)
-                                                                                    ↓
-                                                                              write_output
+parse_resume → scrape_jd → score_before → ask_clarifications
+  → recruiter_instruct → latex_expert_enhance → score_after → review_changes
+         ^                                                         |
+         |                                                         |
+    recruiter_revise_instruct ←──────── (user feedback) ───────────+
+                                                                   |
+                                                             (user accepts)
+                                                                   ↓
+                                                             write_output
 ```
 
-The conditional edge at `review_changes` is controlled by `_should_revise()` in `graph.py` — routes back to `enhance_resume` if `revision_feedback` is set, otherwise to `write_output`.
+### Sub-agents
 
-- **State** (`agent/state.py`): A `TypedDict` (with `total=False`) passed through the graph — holds parsed LaTeX, JD analysis, scores, enhanced output, and review loop fields (`revision_feedback`, `revision_count`).
-- **Nodes** (`agent/nodes.py`): Each node reads state, does work (LLM call, file I/O, user prompt), and returns a partial state update. `enhance_resume_node` handles both initial enhancement (`ENHANCEMENT_PROMPT`) and revision passes (`REVISION_PROMPT`) based on `revision_count`. `review_changes_node` generates an LLM-powered change summary and prompts the user to accept or give feedback.
-- **Prompts** (`agent/prompts.py`): `SYSTEM_PROMPT` (shared across all LLM calls), `JD_ANALYSIS_PROMPT`, `SCORING_PROMPT`, `CLARIFICATION_PROMPT`, `ENHANCEMENT_PROMPT`, `REVISION_PROMPT`, `CHANGE_SUMMARY_PROMPT`. The system prompt and scoring prompt emphasize recognizing transferable skills across domains rather than demanding exact keyword matches.
-- **Schemas** (`models/schemas.py`): Pydantic models used as structured output targets — `JDAnalysis`, `ATSScore`, `ClarificationQuestion` (with `example_answer` field), `ClarificationRequest`, `EnhancedSections`, etc. All LLM calls use `.with_structured_output()`.
-- **LaTeX handling** (`tools/latex.py`): Regex-based section splitting + `pylatexenc` for validation. The LLM only modifies section content — preamble, postamble, and `__header__` section are preserved untouched. Includes `escape_special_chars()`, `format_latex()`, and `validate_latex()`.
-- **Scraping** (`tools/scraper.py`): `httpx` + `trafilatura` (primary) / `beautifulsoup4` (fallback) for extracting JD text from URLs. Falls back to manual paste if scraping fails.
-- **Config** (`config.py`): LLM provider factory — returns `ChatAnthropic`, `ChatOpenAI`, or `ChatGoogleGenerativeAI` based on `--provider` flag. Default models: `claude-sonnet-4-20250514`, `gpt-4o`, `gemini-2.5-flash`.
+**Recruiter Agent** (strategist) — analyzes the JD, scores the resume, asks clarifying questions, and produces an `EnhancementPlan` with specific rewriting instructions. Has access to JD keywords and resume content. Its message history accumulates across nodes (`recruiter_messages` in state) so each step sees prior context.
 
-The CLI (`cli.py`) uses Typer. Entry point is `recruiter-agent = recruiter_agent.cli:app` in pyproject.toml. `--no-interactive` skips both clarification questions and the review loop.
+**LaTeX Expert Agent** (writer) — receives the recruiter's `EnhancementPlan` and rewrites resume sections. Never sees raw JD keywords — only the recruiter's instructions. This prevents keyword stuffing structurally. Has its own message history (`writer_messages`).
+
+The revision loop goes through the recruiter: `review_changes → recruiter_revise_instruct → latex_expert_enhance → score_after → review_changes`. The recruiter mediates every revision.
+
+### Key components
+
+- **State** (`agent/state.py`): `TypedDict` with `total=False`. Includes per-agent message histories using `Annotated[list[BaseMessage], add_messages]` — the `add_messages` reducer appends new messages rather than replacing.
+- **Nodes** (`agent/nodes.py`): `score_before_node` seeds `recruiter_messages` with full context. `ask_clarifications_node` and `recruiter_instruct_node` append to it. `latex_expert_enhance_node` maintains separate `writer_messages`. `_format_plan_for_writer()` converts `EnhancementPlan` to readable prose.
+- **Prompts** (`agent/prompts.py`): Split into recruiter prompts (`RECRUITER_SYSTEM_PROMPT`, `RECRUITER_INSTRUCTION_PROMPT`, `RECRUITER_REVISION_PROMPT`) and writer prompts (`WRITER_SYSTEM_PROMPT`, `WRITER_ENHANCE_PROMPT`, `WRITER_REVISION_PROMPT`). Shared: `JD_ANALYSIS_PROMPT`, `SCORING_PROMPT`, `CLARIFICATION_PROMPT`, `CHANGE_SUMMARY_PROMPT`.
+- **Schemas** (`models/schemas.py`): `EnhancementPlan` (with `SectionInstruction` and `BulletInstruction`) is the contract between recruiter and writer. Other models: `JDAnalysis`, `ATSScore`, `ClarificationQuestion`, `EnhancedSections`.
+- **LaTeX handling** (`tools/latex.py`): Regex-based section splitting + `pylatexenc` for validation. The `__header__` section is never sent to the LLM.
+- **Scraping** (`tools/scraper.py`): `httpx` + `trafilatura` (primary) / `beautifulsoup4` (fallback). Falls back to manual paste if scraping fails.
+- **Config** (`config.py`): LLM provider factory. Default models: `claude-sonnet-4-20250514`, `gpt-4o`, `gemini-2.5-flash`.
+
+The CLI (`cli.py`) uses Typer. Entry points: `recruiter-agent` and `ra` (alias). `--no-interactive` skips clarifications and the review loop.
 
 ## Style Guidelines
 
