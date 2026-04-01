@@ -31,9 +31,14 @@ class ClarifyingQA(BaseModel):
     answer: str
 
 
+class ClarificationQuestion(BaseModel):
+    question: str = Field(description="A simple, specific question in plain language about one missing skill or experience")
+    example_answer: str = Field(description="A short, realistic example answer showing the kind of detail expected")
+
+
 class ClarificationRequest(BaseModel):
     needs_clarification: bool = Field(description="Whether clarifying questions are needed")
-    questions: list[str] = Field(description="Questions to ask the candidate, empty if needs_clarification is False")
+    questions: list[ClarificationQuestion] = Field(description="Questions to ask the candidate, empty if needs_clarification is False")
 
 
 class EnhancedSections(BaseModel):

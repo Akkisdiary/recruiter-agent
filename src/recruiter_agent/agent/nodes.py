@@ -197,11 +197,12 @@ def ask_clarifications_node(state: ResumeAgentState) -> dict:
         console.print(
             "\n[bold yellow]I need to ask you a few questions to strengthen your resume:[/]\n"
         )
-        for i, question in enumerate(clarification.questions, 1):
-            console.print(f"[bold]{i}. {question}[/]")
+        for i, q in enumerate(clarification.questions, 1):
+            console.print(f"[bold]{i}. {q.question}[/]")
+            console.print(f"[dim]   Example: {q.example_answer}[/]")
             answer = console.input("[dim]Your answer (press Enter to skip): [/]")
             if answer.strip():
-                qa_pairs.append(ClarifyingQA(question=question, answer=answer.strip()))
+                qa_pairs.append(ClarifyingQA(question=q.question, answer=answer.strip()))
         console.print()
     else:
         console.print("  No clarifications needed")
