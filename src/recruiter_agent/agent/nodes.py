@@ -79,9 +79,7 @@ def _format_content_for_writer(content: ResumeContent) -> str:
 
 def parse_resume_node(state: ResumeAgentState) -> dict:
     """Parse the LaTeX resume into preamble, sections, and postamble."""
-    console.print(
-        "[bold blue]Step 1:[/] Parsing resume...", highlight=False
-    )
+    console.print("[bold blue]Step 1:[/] Parsing resume...", highlight=False)
 
     file_path = Path(state["resume_path"])
     raw_latex = file_path.read_text(encoding="utf-8")
@@ -135,9 +133,7 @@ def scrape_jd_node(state: ResumeAgentState) -> dict:
         console.print(
             f"  Role: {jd_analysis.job_title} at {jd_analysis.company}"
         )
-        console.print(
-            f"  Keywords: {', '.join(jd_analysis.keywords[:10])}..."
-        )
+        console.print(f"  Keywords: {', '.join(jd_analysis.keywords[:10])}...")
 
     return {
         "jd_raw_text": jd_text,
@@ -229,9 +225,7 @@ def score_before_node(state: ResumeAgentState) -> dict:
 
 def ask_clarifications_node(state: ResumeAgentState) -> dict:
     """Ask clarifying questions using the recruiter's accumulated context."""
-    console.print(
-        "[bold blue]Step 4:[/] Checking for gaps...", highlight=False
-    )
+    console.print("[bold blue]Step 4:[/] Checking for gaps...", highlight=False)
 
     if state.get("no_interactive"):
         console.print("  Skipped (non-interactive mode)")
@@ -262,9 +256,7 @@ def ask_clarifications_node(state: ResumeAgentState) -> dict:
             )
             if answer.strip():
                 qa_pairs.append(
-                    ClarifyingQA(
-                        question=q.question, answer=answer.strip()
-                    )
+                    ClarifyingQA(question=q.question, answer=answer.strip())
                 )
         console.print()
 
@@ -285,9 +277,7 @@ def ask_clarifications_node(state: ResumeAgentState) -> dict:
             )
     else:
         console.print("  No clarifications needed")
-        new_messages.append(
-            AIMessage(content="No clarifications needed.")
-        )
+        new_messages.append(AIMessage(content="No clarifications needed."))
 
     return {
         "clarifying_qa": qa_pairs,
@@ -310,9 +300,7 @@ def recruiter_instruct_node(state: ResumeAgentState) -> dict:
     content = structured_llm.invoke(messages)
 
     if state.get("verbose"):
-        console.print(
-            f"  Sections: {[s.name for s in content.sections]}"
-        )
+        console.print(f"  Sections: {[s.name for s in content.sections]}")
 
     ai_msg = AIMessage(content=content.model_dump_json())
 
@@ -428,9 +416,7 @@ def latex_expert_enhance_node(state: ResumeAgentState) -> dict:
         if s.name == "__header__":
             continue
         enhanced.append(
-            ResumeSection(
-                name=s.name, content=_postprocess_section(s.content)
-            )
+            ResumeSection(name=s.name, content=_postprocess_section(s.content))
         )
 
     if state.get("verbose"):
@@ -553,24 +539,16 @@ def review_changes_node(state: ResumeAgentState) -> dict:
     console.print()
     console.print("[bold yellow]Here's what I changed:[/]\n")
     summary = _get_change_summary(state)
-    console.print(
-        Panel(summary, border_style="yellow", title="Change Summary")
-    )
+    console.print(Panel(summary, border_style="yellow", title="Change Summary"))
 
     console.print()
     console.print("[bold]Options:[/]")
-    console.print(
-        "  [bold green]a[/] — Accept and save the enhanced resume"
-    )
-    console.print(
-        "  [bold yellow]f[/] — Give feedback for another revision"
-    )
+    console.print("  [bold green]a[/] — Accept and save the enhanced resume")
+    console.print("  [bold yellow]f[/] — Give feedback for another revision")
     console.print()
 
     while True:
-        choice = (
-            console.input("[bold]Your choice (a/f): [/]").strip().lower()
-        )
+        choice = console.input("[bold]Your choice (a/f): [/]").strip().lower()
         if choice in ("a", "f"):
             break
         console.print(
@@ -598,9 +576,7 @@ def review_changes_node(state: ResumeAgentState) -> dict:
 
 def write_output_node(state: ResumeAgentState) -> dict:
     """Reconstruct and write the enhanced .tex file."""
-    console.print(
-        "[bold blue]Writing enhanced resume...[/]", highlight=False
-    )
+    console.print("[bold blue]Writing enhanced resume...[/]", highlight=False)
 
     enhanced_latex = reconstruct_latex(
         state["preamble"],
@@ -608,9 +584,7 @@ def write_output_node(state: ResumeAgentState) -> dict:
         state["enhanced_sections"],
     )
 
-    body_content = "\n".join(
-        s.content for s in state["enhanced_sections"]
-    )
+    body_content = "\n".join(s.content for s in state["enhanced_sections"])
     warnings = validate_latex(body_content)
     if warnings:
         console.print("[yellow]LaTeX validation warnings:[/]")

@@ -48,7 +48,21 @@ def get_llm(
             raise ValueError("GOOGLE_API_KEY environment variable is required")
         return ChatGoogleGenerativeAI(model=model, google_api_key=api_key)  # type: ignore[arg-type]
 
+    elif provider == "ollama":
+        try:
+            from langchain_ollama import ChatOllama
+        except ImportError:
+            raise ImportError(
+                "langchain-ollama is required for Ollama provider. "
+                "Install it with: uv add langchain-ollama"
+            )
+
+        model = model or "llama3.1"
+        base_url = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434")
+        return ChatOllama(model=model, base_url=base_url)
+
     else:
         raise ValueError(
-            f"Unknown provider: {provider}. Supported: anthropic, openai, google"
+            f"Unknown provider: {provider}. "
+            f"Supported: anthropic, openai, google, ollama"
         )

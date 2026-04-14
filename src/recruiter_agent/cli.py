@@ -55,7 +55,9 @@ def enhance(
     provider: Annotated[
         str,
         typer.Option(
-            "--provider", "-p", help="LLM provider (anthropic, openai, google)"
+            "--provider",
+            "-p",
+            help="LLM provider (anthropic, openai, google, ollama)",
         ),
     ] = "google",
     verbose: Annotated[

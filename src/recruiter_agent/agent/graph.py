@@ -43,9 +43,7 @@ def build_graph() -> StateGraph:
     graph.add_node("score_before", score_before_node)
     graph.add_node("ask_clarifications", ask_clarifications_node)
     graph.add_node("recruiter_instruct", recruiter_instruct_node)
-    graph.add_node(
-        "recruiter_revise_instruct", recruiter_revise_instruct_node
-    )
+    graph.add_node("recruiter_revise_instruct", recruiter_revise_instruct_node)
     graph.add_node("score_after", score_after_node)
 
     # Writer agent node
